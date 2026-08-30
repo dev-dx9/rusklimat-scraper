@@ -7,7 +7,5 @@ from dataclasses import dataclass
 
 
 @dataclass
-class ScraperItem:
-    # define the fields for your item here like:
-    # name: str | None = None
+class ProductItem:
     pass

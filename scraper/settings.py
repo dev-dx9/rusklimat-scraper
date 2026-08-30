@@ -6,13 +6,20 @@
 #     https://docs.scrapy.org/en/latest/topics/settings.html
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
+import scrapy_poet
 
 BOT_NAME = 'scraper'
 
 SPIDER_MODULES = ['scraper.spiders']
 NEWSPIDER_MODULE = 'scraper.spiders'
 
-ADDONS = {}
+ADDONS = {
+    scrapy_poet.Addon: 300,  # pyright: ignore[reportPrivateImportUsage]
+}
+
+SCRAPY_POET_DISCOVER = [
+    'scraper.pages',
+]
 
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
