@@ -1,10 +1,11 @@
 import scrapy
 
+from scraper.config import settings
+
 
 class ProductsSpider(scrapy.Spider):
     name = 'products'
-    allowed_domains = ['example.com']
-    start_urls = ['https://example.com']
+    allowed_domains = [settings.domain]
 
     def parse(self, response):
         pass
