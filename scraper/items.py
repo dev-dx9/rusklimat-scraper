@@ -7,5 +7,30 @@ from dataclasses import dataclass
 
 
 @dataclass
+class ProductReview:
+    author: str | None
+    published_at: str | None
+    body: str | None
+
+
+@dataclass
 class ProductItem:
-    pass
+    source_url: str
+    name: str | None
+    model: str | None
+    brand: str | None
+    manufacturer: str | None
+    category: str | None
+    category_path: str | None
+    image_urls: list[str]
+    price: str | None
+    price_currency: str | None
+    sku: str | None
+    old_price: str | None
+    discount: str | None
+    description: str | None
+    tags: list[str]
+    attributes: dict[str, str]
+    rating: float | None
+    review_count: int | None
+    reviews: list[ProductReview]

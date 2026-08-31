@@ -22,8 +22,9 @@ class ProductsSpider(scrapy.Spider):
         response,
         page: CatalogPage,
     ) -> Iterator[scrapy.Request]:
+        category_limit = 1  # TODO: remove once crawling the full catalog
         yield from response.follow_all(
-            page.category_urls[:1],
+            page.category_urls[:category_limit],
             callback=self.parse_category,
         )
 
@@ -32,8 +33,9 @@ class ProductsSpider(scrapy.Spider):
         response,
         page: CategoryPage,
     ) -> Iterator[scrapy.Request]:
+        product_limit = 1  # TODO: remove once crawling the full catalog
         yield from response.follow_all(
-            page.product_urls,
+            page.product_urls[:product_limit],
             callback=self.parse_product,
         )
 
@@ -47,6 +49,5 @@ class ProductsSpider(scrapy.Spider):
         self,
         _response,
         item: ProductItem,
-    ):
-
+    ) -> Iterator[ProductItem]:
         yield item
