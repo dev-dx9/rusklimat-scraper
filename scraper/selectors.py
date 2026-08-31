@@ -21,3 +21,6 @@ PRODUCT_IMAGE_URLS = (
 PRODUCT_ATTRIBUTES = '[data-locator="product-specs__spec-item"]'
 PRODUCT_ATTRIBUTE_NAME = '[data-locator="product-specs__spec-item-title"]::text'
 PRODUCT_ATTRIBUTE_VALUE = '[data-locator="product-specs__spec-item-value_link"]::text'
+PRODUCT_DOCUMENTS = '#docs .docs-item .doc'
+PRODUCT_DOCUMENT_NAME = '.doc-title::text'
+PRODUCT_DOCUMENT_URL = '::attr(href)'

@@ -6,13 +6,16 @@ from typing import Any
 from web_poet import Returns, WebPage, field, handle_urls
 
 from scraper.config import settings
-from scraper.items import ProductItem, ProductReview
+from scraper.items import ProductDocument, ProductItem, ProductReview
 from scraper.selectors import (
     PRODUCT_ATTRIBUTE_NAME,
     PRODUCT_ATTRIBUTE_VALUE,
     PRODUCT_ATTRIBUTES,
     PRODUCT_DESCRIPTION,
     PRODUCT_DISCOUNT,
+    PRODUCT_DOCUMENT_NAME,
+    PRODUCT_DOCUMENT_URL,
+    PRODUCT_DOCUMENTS,
     PRODUCT_JSON_LD,
     PRODUCT_OLD_PRICE,
     PRODUCT_SKU,
@@ -175,11 +178,13 @@ class ProductPage(WebPage, Returns[ProductItem]):
 
     @field
     def price(self) -> str | None:
-        return self._get_offer_value('price')
+        value = self._get_offer_value('price')
+        return str(value) if value is not None else None
 
     @field
     def price_currency(self) -> str | None:
-        return self._get_offer_value('priceCurrency')
+        value = self._get_offer_value('priceCurrency')
+        return str(value) if value is not None else None
 
     @field
     def sku(self) -> str | None:
@@ -205,11 +210,27 @@ class ProductPage(WebPage, Returns[ProductItem]):
         if not description:
             return None
 
-        return (
-            ''.join(description.xpath('./node()').getall())
-            .translate(str.maketrans('', '', '\n\r\t'))
-            .strip()
+        value = ''.join(description.xpath('./node()').getall())
+
+        value = re.sub(
+            r'\s(?:style|border|width|height)=(["\']).*?\1',
+            '',
+            value,
+            flags=re.IGNORECASE,
         )
+
+        value = re.sub(
+            r'<p>\s*(?:<br\s*/?>\s*)+</p>',
+            '',
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        value = value.replace('\xa0', ' ')
+        value = re.sub(r'[\n\r\t]+', ' ', value)
+        value = re.sub(r' {2,}', ' ', value)
+
+        return value.strip() or None
 
     @field
     def tags(self) -> list[str]:
@@ -223,7 +244,7 @@ class ProductPage(WebPage, Returns[ProductItem]):
     def attributes(self) -> dict[str, str]:
         attributes = {}
 
-        for attribute in self.css(PRODUCT_ATTRIBUTES):
+        for attribute in self.response.css(PRODUCT_ATTRIBUTES):
             name = attribute.css(PRODUCT_ATTRIBUTE_NAME).get()
             value = attribute.css(PRODUCT_ATTRIBUTE_VALUE).get()
 
@@ -231,6 +252,27 @@ class ProductPage(WebPage, Returns[ProductItem]):
                 attributes[name.strip().rstrip(':')] = value.strip()
 
         return attributes
+
+    @field
+    def documents(self) -> list[ProductDocument]:
+        documents = []
+
+        for doc in self.response.css(PRODUCT_DOCUMENTS):
+            url = doc.css(PRODUCT_DOCUMENT_URL).get()
+
+            if not url:
+                continue
+
+            name = doc.css(PRODUCT_DOCUMENT_NAME).get()
+
+            documents.append(
+                ProductDocument(
+                    name=name.strip() if name else None,
+                    url=self.urljoin(url),
+                )
+            )
+
+        return documents
 
     @field
     def rating(self) -> float | None:

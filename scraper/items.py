@@ -14,6 +14,12 @@ class ProductReview:
 
 
 @dataclass
+class ProductDocument:
+    name: str | None
+    url: str
+
+
+@dataclass
 class ProductItem:
     source_url: str
     name: str | None
@@ -31,6 +37,7 @@ class ProductItem:
     description: str | None
     tags: list[str]
     attributes: dict[str, str]
+    documents: list[ProductDocument]
     rating: float | None
     review_count: int | None
     reviews: list[ProductReview]
