@@ -11,6 +11,10 @@ class ProductsSpider(scrapy.Spider):
     name = 'products'
     allowed_domains = [settings.domain]  # noqa: RUF012
 
+    def __init__(self, *args, category_index: str = '0', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.category_index = int(category_index)
+
     async def start(self) -> AsyncIterator[scrapy.Request]:
         yield scrapy.Request(
             url=settings.catalog_url,
@@ -22,8 +26,17 @@ class ProductsSpider(scrapy.Spider):
         response,
         page: CatalogPage,
     ) -> Iterator[scrapy.Request]:
-        yield from response.follow_all(
-            page.category_urls,
+        try:
+            category_url = page.category_urls[self.category_index]
+        except IndexError:
+            self.logger.info(
+                'No category at index %s, stopping',
+                self.category_index,
+            )
+            return
+
+        yield response.follow(
+            category_url,
             callback=self.parse_category,
         )
 
@@ -43,6 +56,7 @@ class ProductsSpider(scrapy.Spider):
                 callback=self.parse_category,
             )
 
+    # noinspection PyMethodMayBeStatic
     def parse_product(
         self,
         _response,

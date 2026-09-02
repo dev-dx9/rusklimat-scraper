@@ -29,3 +29,6 @@ typecheck:
     uv run pyright
 
 check: lint format-check typecheck
+
+crawl-category index:
+    uv run scrapy crawl products -a category_index={{index}}
