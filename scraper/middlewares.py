@@ -1,100 +1,95 @@
-# Define here the models for your spider middleware
-#
-# See documentation in:
-# https://docs.scrapy.org/en/latest/topics/spider-middleware.html
+"""Downloader middleware for solving the site's __js_p_ JS challenge.
 
-from scrapy import signals
+The site issues a JS proof-of-work challenge on the first request:
+it sets a `__js_p_` cookie with parameters (code, age, sec, disable_utm, _),
+and a page-embedded script computes `get_jhash(code)` and re-requests the
+same URL with `__jhash_` and `__jua_` cookies set. This middleware replicates
+that computation server-side so Scrapy never needs a real JS engine.
+"""
 
-# useful for handling different item types with a single interface
-from itemadapter import ItemAdapter
+import logging
+from urllib.parse import quote
 
+from scrapy import Request
+from scrapy.http import Response
 
-class ScraperSpiderMiddleware:
-    # Not all methods need to be defined. If a method is not defined,
-    # scrapy acts as if the spider middleware does not modify the
-    # passed objects.
+logger = logging.getLogger(__name__)
 
-    @classmethod
-    def from_crawler(cls, crawler):
-        # This method is used by Scrapy to create your spiders.
-        s = cls()
-        crawler.signals.connect(s.spider_opened, signal=signals.spider_opened)
-        return s
+JS_P_COOKIE = '__js_p_'
+JHASH_COOKIE = '__jhash_'
+JUA_COOKIE = '__jua_'
 
-    def process_spider_input(self, response, spider):
-        # Called for each response that goes through the spider
-        # middleware and into the spider.
-
-        # Should return None or raise an exception.
-        return None
-
-    def process_spider_output(self, response, result, spider):
-        # Called with the results returned from the Spider, after
-        # it has processed the response.
-
-        # Must return an iterable of Request, or item objects.
-        for i in result:
-            yield i
-
-    def process_spider_exception(self, response, exception, spider):
-        # Called when a spider or process_spider_input() method
-        # (from other spider middleware) raises an exception.
-
-        # Should return either None or an iterable of Request or item objects.
-        pass
-
-    async def process_start(self, start):
-        # Called with an async iterator over the spider start() method or the
-        # matching method of an earlier spider middleware.
-        async for item_or_request in start:
-            yield item_or_request
-
-    def spider_opened(self, spider):
-        spider.logger.info('Spider opened: %s' % spider.name)
+# Marks a request as already carrying a solved challenge, to avoid loops.
+CHALLENGE_SOLVED_META_KEY = 'js_challenge_solved'
 
 
-class ScraperDownloaderMiddleware:
-    # Not all methods need to be defined. If a method is not defined,
-    # scrapy acts as if the downloader middleware does not modify the
-    # passed objects.
+def get_jhash(code: int) -> int:
+    """Python port of the page's get_jhash() proof-of-work function."""
+    x = 123456789
+    k = 0
 
-    @classmethod
-    def from_crawler(cls, crawler):
-        # This method is used by Scrapy to create your spiders.
-        s = cls()
-        crawler.signals.connect(s.spider_opened, signal=signals.spider_opened)
-        return s
+    for i in range(1677696):
+        x = ((x + code) ^ (x + (x % 3) + (x % 17) + code) ^ i) % 16776960
 
-    def process_request(self, request, spider):
-        # Called for each request that goes through the downloader
-        # middleware.
+        if x % 117 == 0:
+            k = (k + 1) % 1111
 
-        # Must either:
-        # - return None: continue processing this request
-        # - or return a Response object
-        # - or return a Request object
-        # - or raise IgnoreRequest: process_exception() methods of
-        #   installed downloader middleware will be called
-        return None
+    return k
 
-    def process_response(self, request, response, spider):
-        # Called with the response returned from the downloader.
 
-        # Must either;
-        # - return a Response object
-        # - return a Request object
-        # - or raise IgnoreRequest
-        return response
+def _parse_js_p_cookie(headers) -> str | None:
+    for raw in headers.getlist(b'Set-Cookie'):
+        decoded = raw.decode('latin-1')
 
-    def process_exception(self, request, exception, spider):
-        # Called when a download handler or a process_request()
-        # (from other downloader middleware) raises an exception.
+        if decoded.startswith(f'{JS_P_COOKIE}='):
+            return decoded.split(';', 1)[0].split('=', 1)[1]
 
-        # Must either:
-        # - return None: continue processing this exception
-        # - return a Response object: stops process_exception() chain
-        # - return a Request object: stops process_exception() chain
-        pass
+    return None
 
-    def spider_opened(self, spider):
-        spider.logger.info('Spider opened: %s' % spider.name)
+
+class JsChallengeMiddleware:
+    """Detects the __js_p_ challenge and transparently retries with a solution."""
+
+    def process_response(
+        self,
+        request: Request,
+        response: Response,
+    ) -> Request | Response:
+        if request.meta.get(CHALLENGE_SOLVED_META_KEY):
+            return response
+
+        js_p_value = _parse_js_p_cookie(response.headers)
+
+        if js_p_value is None:
+            return response
+
+        try:
+            code = int(js_p_value.split(',', 1)[0])
+        except ValueError, IndexError:
+            logger.warning('Unparseable __js_p_ cookie: %r', js_p_value)
+            return response
+
+        jhash = get_jhash(code)
+        user_agent = (request.headers.get(b'User-Agent') or b'').decode('utf-8')
+
+        logger.debug(
+            'Solved JS challenge for %s (code=%s, jhash=%s)',
+            request.url,
+            code,
+            jhash,
+        )
+
+        cookies = {
+            JS_P_COOKIE: js_p_value,
+            JHASH_COOKIE: str(jhash),
+            JUA_COOKIE: quote(user_agent, safe=''),
+        }
+
+        return request.replace(
+            cookies=cookies,
+            dont_filter=True,
+            meta={
+                **request.meta,
+                CHALLENGE_SOLVED_META_KEY: True,
+            },
+        )
